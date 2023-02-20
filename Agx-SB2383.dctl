@@ -1,19 +1,35 @@
+//Based on Troy Sobotka's work
+//Agx log is a pure log2 trasfer function with 10 stops under 0.18 and 6.5 stops over middle grey
+__DEVICE__ float Lintolog(float in,float mn, float mx)
+  {
+
+    
+    in = _logf(in/0.18)/_logf(2);
+    in = (in-mn)/(mx-mn);
+ 
+  return in;
+
+  }
+
+//SB2383 ored=4.5,og=-0.5,ob= -2.0
+
 DEFINE_UI_PARAMS(rc, R Compress, DCTLUI_SLIDER_FLOAT, 0.15, 0, 1, 0.01)
-DEFINE_UI_PARAMS(gc, G Compress, DCTLUI_SLIDER_FLOAT, 0.1, 0, 1, 0.01)
+DEFINE_UI_PARAMS(gc, G Compress, DCTLUI_SLIDER_FLOAT, 0.15, 0, 1, 0.01)
 DEFINE_UI_PARAMS(bc,B Compress, DCTLUI_SLIDER_FLOAT, 0.1, 0, 1, 0.01)
-DEFINE_UI_PARAMS(ored, Rotate R, DCTLUI_SLIDER_FLOAT, 4.5, -10.0, 10, 1)
+DEFINE_UI_PARAMS(ored, Rotate R, DCTLUI_SLIDER_FLOAT, 1.75, -10.0, 10, 1)
 DEFINE_UI_PARAMS(og, Rotate G, DCTLUI_SLIDER_FLOAT, -0.5, -10.0, 10, 1)
-DEFINE_UI_PARAMS(ob, Rotate B, DCTLUI_SLIDER_FLOAT, -2.0, -10.0, 10, 1)
+DEFINE_UI_PARAMS(ob, Rotate B, DCTLUI_SLIDER_FLOAT, -1.0, -10.0, 10, 1)
 DEFINE_UI_PARAMS(sp, Shoulder Power, DCTLUI_SLIDER_FLOAT, 1.5, 0, 3, 0.1)
 DEFINE_UI_PARAMS(tp, Toe Power, DCTLUI_SLIDER_FLOAT, 1.5, 0, 3, 0.1)
 DEFINE_UI_PARAMS(slope, Fulcrum Slope, DCTLUI_SLIDER_FLOAT, 2.4, 1, 3, 0.1)
-DEFINE_UI_PARAMS(in_gamut, input gamut, DCTLUI_COMBO_BOX, 6, {ap0, ap1, p3d65,p3d60, rec2020, rec709, awg3, awg4,rwg, sgamut3,sgamut3cine, blackmagicwg, canoncinema, davinciwg,egamut}, {ACES, ACEScg, P3D65,P3D60, Rec.2020, Rec.709, Alexa Wide Gamut 3,Alexa Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3,Sony SGamut3Cine, Blackmagic Wide Gamut, Canon Cinema - Gamut, DaVinci Wide Gamut,Filmlight E - Gamut})
-DEFINE_UI_PARAMS(in_curve, input curve, DCTLUI_COMBO_BOX, 2, {linear, acescct, arri_logc,arri_logc4, red_log3g10, sony_slog3, blackmagic_film_gen5, canonlog3, davinci_intermediate,filmlight_tlog}, {Linear, ACEScct, Arri V3LogC,Arri LogCV4, Red Log3G10, Sony SLog3, Blackmagic Film Gen5, Canon Log3, DaVinci Intermediate,Filmlight TLog})
+DEFINE_UI_PARAMS(in_gamut, input gamut, DCTLUI_COMBO_BOX, 5, {ap0, ap1, p3d65,p3d60, rec2020, rec709, awg3, awg4,rwg, sgamut3,sgamut3cine, blackmagicwg, canoncinema, davinciwg,egamut}, {ACES, ACEScg, P3D65,P3D60, Rec.2020, Rec.709, Alexa Wide Gamut 3,Alexa Wide Gamut 4, Red Wide Gamut RGB, Sony SGamut3,Sony SGamut3Cine, Blackmagic Wide Gamut, Canon Cinema - Gamut, DaVinci Wide Gamut,Filmlight E - Gamut})
+DEFINE_UI_PARAMS(in_curve, input curve, DCTLUI_COMBO_BOX, 0, {linear, acescct, arri_logc,arri_logc4, red_log3g10, sony_slog3, blackmagic_film_gen5, canonlog3, davinci_intermediate,filmlight_tlog}, {Linear, ACEScct, Arri V3LogC,Arri LogCV4, Red Log3G10, Sony SLog3, Blackmagic Film Gen5, Canon Log3, DaVinci Intermediate,Filmlight TLog})
 DEFINE_UI_PARAMS(Loginput, AGXlog Input, DCTLUI_CHECK_BOX, 0)
+DEFINE_UI_PARAMS(Output, Output, DCTLUI_COMBO_BOX, 0, {BaseRec709, AgxLog}, {BaseRec709, AgxLog})
 
 
 
-#include "SB2383lib.h"
+#include "Agxlib.h"
 
 __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
 {
@@ -83,7 +99,7 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
  
   float3 xyz = mult_f3_f33(rgb, in_to_xyz);
   rgb = mult_f3_f33(xyz, xyz_to_rec709);
-    rgb = maxf3(0.0,rgb);
+  rgb = maxf3(0.0,rgb);
 
 
 //Guardrail chroma to rec2020,reduces chroma until no negative values exist
@@ -99,9 +115,9 @@ __DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p
    rgb = mult_f3_f33(rgb,insetmat);
 
 
-   rgb.x = LintoLog(rgb.x,-10,6.5);
-   rgb.y = LintoLog(rgb.y,-10,6.5);
-   rgb.z = LintoLog(rgb.z,-10,6.5);
+   rgb.x = Lintolog(rgb.x,-10,6.5);
+   rgb.y = Lintolog(rgb.y,-10,6.5);
+   rgb.z = Lintolog(rgb.z,-10,6.5);
 
 float3 log = rgb;
 
@@ -116,15 +132,14 @@ float3 log = rgb;
   rgb = clampf3(rgb,0,1);
     
   float3 img = rgb;
-
-  img  = spowf3(img,2.2);
-
-  img = mult_f3_f33(img,outsetmat);
+  
   //img = clampf3(img,0,1);
 
    switch (Output) {
         case BaseRec709:
             img = img;
+            img  = spowf3(img,2.2);
+            img = mult_f3_f33(img,outsetmat);
             img  = (spowf3(img,gm));
             img = maxf3(0.0,img);
             //img.x = _fabs(img.x);
@@ -134,7 +149,8 @@ float3 log = rgb;
 
             break;
         case AgxLog:
-            img=log;
+            //img=log;
+            img=img;
             break;
     }
 
