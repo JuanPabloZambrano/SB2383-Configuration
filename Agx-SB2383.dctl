@@ -3,7 +3,8 @@
 __DEVICE__ float Lintolog(float in,float mn, float mx)
   {
 
-    
+    float minimum = _powf(2,-15)*0.18;
+    in = _fmaxf(minimum,in);
     in = _logf(in/0.18)/_logf(2);
     in = (in-mn)/(mx-mn);
  
